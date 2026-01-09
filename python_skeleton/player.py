@@ -99,18 +99,115 @@ class Player(Bot):
         # the number of chips your opponent has contributed to the pot
         opp_contribution = STARTING_STACK - opp_stack
 
-        # Only use DiscardAction if it's in legal_actions (which already checks street)
+        pot_total = my_contribution + opp_contribution
+
+        # Start Game Strategy Here!
         # legal_actions() returns DiscardAction only when street is 2 or 3
         if DiscardAction in legal_actions:
             # Always discards the first card in the bot's hand
             return DiscardAction(0)
+
+
+        # Only use DiscardAction if it's in legal_actions (which already checks street)
+        # legal_actions() returns DiscardAction only when street is 2 or 3
+        if DiscardAction in legal_actions:
+            # Create Ranks
+            ranks = "23456789TJQKA"
+            suits = "CSDH"
+            strong_ranks = "TJQKA" # For Full House
+            weak_ranks = "23456"
+
+            hole_ranks = [-1, -1, -1]
+            hole_suits = [-1, -1, -1]
+            board_ranks = [-1, -1]
+            board_suits = [-1, -1]
+
+            #Set ranks for holes
+            for card in range(3):
+                hole_ranks[card] = ranks.index(my_cards[card][0])
+                hole_suits[card] = suits.index(my_cards[card][1])
+
+            #Set ranks for board
+            for card in range(2):
+                board_ranks[card] = ranks.index(board_cards[card][0])
+                board_suits[card] = suits.index(my_cards[card][1])
+
+            # Cases to look for: royal/straight flush, 3+ of same rank, drop lower ranks
+            # Make action based on suit
+            if hole_suits[0] == hole_suits[1] and hole_suits[0] != hole_suits[2]:
+                if hole_suits[0] in board_suits:
+                    return DiscardAction(2)
+                elif hole_ranks[0] == hole_ranks[2] and hole_ranks[0] in board_ranks:
+                    return DiscardAction(1)
+
+
+            elif hole_suits[0] == hole_suits[2] and hole_suits[0] != hole_suits[1]:
+                if hole_suits[0] in board_suits:
+                    return DiscardAction(1)
+                elif hole_ranks[0] == hole_ranks[1] and hole_ranks[0] in board_ranks:
+                    return DiscardAction(2)
+
+            elif hole_suits[1] == hole_suits[2] and hole_suits[1] != hole_suits[0]:
+                if hole_suits[1] in board_suits:
+                    return DiscardAction(0)
+                elif hole_ranks[1] == hole_ranks[0] and hole_ranks[1] in board_ranks:
+                    return DiscardAction(2)
+
+            # Default: Discard lowest rank
+            min_suit = min(hole_ranks)
+            min_index = hole_ranks.index(min_suit)
+            return DiscardAction(min_index)
+
         if RaiseAction in legal_actions:
             # the smallest and largest numbers of chips for a legal bet/raise
             min_raise, max_raise = round_state.raise_bounds()
             min_cost = min_raise - my_pip  # the cost of a minimum bet/raise
             max_cost = max_raise - my_pip  # the cost of a maximum bet/raise
-            if random.random() < 0.5:
-                return RaiseAction(min_raise)
+
+            # Check if hand has strong cards
+            is_hole_strong = True
+            is_hole_weak = False
+
+            is_board_strong = True
+            is_board_weak = False
+
+            for card in my_cards:
+                if not (card[0] in strong_ranks):
+                    is_hole_strong = False
+                if (card[0] in weak_ranks):
+                    is_hole_weak = True
+
+            for card in board_cards:
+                if not (card[0] in strong_ranks):
+                    is_board_strong = False
+                if (card[0] in weak_ranks):
+                    is_board_weak = True
+
+            # Go all in/very high if both are strong
+
+            # Bluff vs. Fold Action
+            if is_hole_weak or is_board_weak:
+                if is_hole_weak and is_board_weak:
+                    return FoldAction()
+                else:
+                    # Check if board is strong, it true then go max raise
+                    if is_board_strong:
+                        return RaiseAction(max_raise)
+
+            # If cards are actually strong
+            if is_hole_strong or is_board_strong:
+                if is_hole_strong and is_board_strong:
+                    return RaiseAction(min(min_raise * 8, max_raise))
+                else:
+                    if random.random() < 0.6:
+                        return RaiseAction(min(min_raise * 4, max_raise))
+
+            # Middling Cards
+            else:
+                if random.random() < 0.3:
+                    return RaiseAction(min_raise)
+
+        # More likely to check with middling
         if CheckAction in legal_actions:  # check-call
             return CheckAction()
         if random.random() < 0.25:
